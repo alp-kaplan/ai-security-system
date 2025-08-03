@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Face Manager</title>
+</head>
+<body>
+  <h1>Face Manager Web UI</h1>
+
+  <section>
+    <h2>Add Person</h2>
+    <form id="add-form">
+      <input type="text" name="name" placeholder="Enter name" required />
+      <input type="file" name="files" multiple accept="image/*" required />
+      <button type="submit">Upload</button>
+    </form>
+    <div id="add-status"></div>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Delete Person</h2>
+    <select id="delete-name"></select>
+    <button onclick="deletePerson()">Delete</button>
+    <div id="delete-status"></div>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Rename Person</h2>
+    <div id="person-table"></div>
+    <br>
+    <input type="text" id="rename-new-name" placeholder="New name" />
+    <button onclick="renamePerson()">Rename</button>
+    <div id="rename-status"></div>
+  </section>
+  
+
+  <script>
+    const API = "http://192.168.0.123:8000";
+
+    async function loadPeople() {
+      const res = await fetch(`${API}/list`);
+      const data = await res.json();
+      const select = document.getElementById("delete-name");
+      select.innerHTML = "";
+      data.people.forEach(name => {
+        const option = document.createElement("option");
+        option.value = option.textContent = name;
+        select.appendChild(option);
+      });
+      const renameSelect = document.getElementById("rename-old-name");
+      renameSelect.innerHTML = "";
+      data.people.forEach(name => {
+        const option = document.createElement("option");
+        option.value = option.textContent = name;
+        renameSelect.appendChild(option);
+      });
+    }
+
+    let selectedOldName = null;
+
+    async function loadTable() {
+      const res = await fetch(`${API}/people_with_images`);
+      const data = await res.json();
+      const container = document.getElementById("person-table");
+      container.innerHTML = "";
+
+      const table = document.createElement("table");
+      table.style.borderCollapse = "collapse";
+      data.people.forEach((person) => {
+        const row = document.createElement("tr");
+        row.style.cursor = "pointer";
+        row.onclick = () => {
+          selectedOldName = person.name;
+          document.querySelectorAll("#person-table tr").forEach(tr => tr.style.backgroundColor = "");
+          row.style.backgroundColor = "#e0f7fa";
+        };
+
+        const nameCell = document.createElement("td");
+        nameCell.textContent = person.name;
+        nameCell.style.padding = "10px";
+        row.appendChild(nameCell);
+
+        const imgCell = document.createElement("td");
+        person.images.forEach((img) => {
+          const image = document.createElement("img");
+          image.src = img;
+          image.style.width = "auto";
+          image.style.height = "300px";
+          image.style.borderRadius = "8px";
+          image.style.boxShadow = "0 2px 6px rgba(0,0,0,0.2)";
+          image.style.transition = "transform 0.2s ease";
+          imgCell.appendChild(image);
+        });
+        row.appendChild(imgCell);
+        table.appendChild(row);
+      });
+
+      container.appendChild(table);
+    }
+
+    document.getElementById("add-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const form = new FormData(e.target);
+      const res = await fetch(`${API}/add`, {
+        method: "POST",
+        body: form,
+      });
+      const data = await res.json();
+      document.getElementById("add-status").textContent = data.message || data.error;
+      loadPeople();
+      loadTable();
+    });
+
+    async function deletePerson() {
+      const name = document.getElementById("delete-name").value;
+      const res = await fetch(`${API}/delete/${encodeURIComponent(name)}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      document.getElementById("delete-status").textContent = data.message || data.error;
+      loadPeople();
+      loadTable();
+    }
+
+    async function renamePerson() {
+      const new_name = document.getElementById("rename-new-name").value;
+      if (!selectedOldName) {
+        document.getElementById("rename-status").textContent = "Please select a person to rename.";
+        return;
+      }
+
+      const res = await fetch(`${API}/rename`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ old_name: selectedOldName, new_name }),
+      });
+      const data = await res.json();
+      document.getElementById("rename-status").textContent = data.message || data.detail || "Rename failed";
+
+      // Reload data after renaming
+      loadPeople();
+      loadTable();
+      selectedOldName = null;
+      document.getElementById("rename-new-name").value = "";
+    }
+
+    // Initial load
+    loadPeople();
+    loadTable();
+  </script>
+</body>
+</html>
